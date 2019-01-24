@@ -1,0 +1,80 @@
+CI.C 473 1 : 	    cmpnum(newdelta.date,targetdelta->date)<=0) {
+CI.C 475 1 : 		       newdelta.date,targetdelta->date, targetdelta->num);
+CI.C 475 1 : 		       newdelta.date,targetdelta->date, targetdelta->num);
+CI.C 516 1 :                         if(!putdtext(olddeltanum,targetdelta->log,diffilename,frewrite)) continue;
+CI.C 621 1 :                     olddeltanum=targetdelta->num;
+CI.C 629 1 :                     } elsif ((targetdelta->next==nil)&&(countnumflds(olddeltanum)>2)) {
+CI.C 631 1 :                         targetdelta->next= &newdelta;
+CI.C 686 1 :                 if (cmpnum(targetdelta->num,branchpointnum)!=0) {
+CI.C 755 1 :                         olddeltanum=targetdelta->num;
+CI.C 763 1 :                         targetdelta->next= &newdelta;
+CI.C 790 1 :         num=delta->num;
+CI.C 795 1 :                 nummatch=strcmp(num,next->delta->num);
+CI.C 809 1 :                 next->delta->lockedby=nil; /* reset locked-by */
+CI.C 881 1 :                 workfilename,delta->num);
+CO.C 304 1 : 			VOID strcpy(numericrev,targetdelta->num);
+CO.C 324 1 : 		diagnose("revision %s%s",targetdelta->num,
+CO.C 474 1 :         num=delta->num;
+CO.C 479 1 :                 nummatch=strcmp(num,next->delta->num);
+CO.C 493 1 :                 next->delta->lockedby=nil; /* reset locked-by */
+CO.C 557 1 :                 else    joinlist[++lastjoin]=tmpdelta->num;
+CO.C 568 1 :                                 else    joinlist[++lastjoin]=tmpdelta->num;
+CO.C 580 1 :                                 if (!getancestor(targetdelta->num,joinlist[1],joinlist[0]))
+CO.C 615 1 :                         VOID strcpy(subs,targetdelta->num);
+RCS.C 855 1 :                         faterror("Can't find delta for revision %s", delta->num);
+RCS.C 858 1 :                 if ( nextdelta->selector != DELETE) {
+RCS.C 860 1 :                         VOID fprintf(frewrite,DELNUMFORM,nextdelta->num,Klog);
+RCS.C 866 1 :                         delta->log=curlogmsg;
+RCS.C 868 1 :                         if (delta!=nil) delta->log="";
+RCS.C 1075 1 : 	num=delta->num;
+RCS.C 1080 1 : 			numr = strcmp(num, next->delta->num);
+RCS.C 1095 1 :                 diagnose("%s unlocked",next->delta->num);
+RCS.C 1097 1 :                 next->delta->lockedby=nil;
+RCS.C 1444 1 :                         diagnose("%s locked",lpt->delta->num);
+RCSEDIT.C 462 1 :         date= delta->date;
+RCSEDIT.C 466 1 :                 VOID fprintf(out,"%c %s %c",VDELIM,delta->author,KDELIM);
+RCSEDIT.C 479 1 : 		VOID fprintf(out," %s ", delta->num);
+RCSEDIT.C 481 1 : 		VOID fprintf(out, " %s %s ",delta->author,delta->state);
+RCSEDIT.C 481 1 : 		VOID fprintf(out, " %s %s ",delta->author,delta->state);
+RCSEDIT.C 482 1 : 		if (delta->lockedby!=nil)
+RCSEDIT.C 483 1 : 			 VOID fprintf(out,"Locker: %s ",delta->lockedby);
+RCSEDIT.C 488 1 :                         delta->lockedby==nil?"":delta->lockedby,KDELIM);
+RCSEDIT.C 488 1 :                         delta->lockedby==nil?"":delta->lockedby,KDELIM);
+RCSEDIT.C 492 1 :                         VDELIM, bindex(RCSfilename,'/'), KDELIM, Comment, delta->num);
+RCSEDIT.C 494 1 :                 VOID fprintf(out, "  %s\n%s",delta->author,Comment);
+RCSEDIT.C 496 1 :                 sp = delta->log;
+RCSEDIT.C 504 1 :                 VOID fprintf(out,"%c %s %c",VDELIM,delta->num,KDELIM);
+RCSEDIT.C 510 1 :                 VOID fprintf(out,"%c %s %c",VDELIM,delta->state,KDELIM);
+RCSFCMP.C 172 1 : 		    lncnt=2; tp=delta->log;
+RCSGEN.C 194 1 :                         fatserror("Can't find delta for revision %s", delta->num);
+RCSGEN.C 200 1 :                         delta->log=curlogmsg;
+RCSGEN.C 202 1 :                         delta->log= "";
+RCSREV.C 580 1 :                         return(next->delta->num);
+RCSSYN.C 247 1 :                         if ((countnumflds(delta->num)%2)!=0)
+RCSSYN.C 339 1 :                 currlock->delta->lockedby = currlock->login;
+RCSSYN.C 423 1 :                VOID fprintf(fout," %s:%s",curassoc->symbol, curassoc->delta->num);
+RCSSYN.C 430 1 :                VOID fprintf(fout," %s:%s",curlock->login, curlock->delta->num);
+RCSUTIL.C 180 1 : 		    next->delta->lockedby=nil; /* reset locked-by */
+RCSUTIL.C 205 1 :                 if (cmpnum(delta->num,next->delta->num)==0) {
+RCSUTIL.C 205 1 :                 if (cmpnum(delta->num,next->delta->num)==0) {
+RCSUTIL.C 211 1 :                                       delta->num, next->login);
+RCSUTIL.C 217 1 :                                        next->delta->num);
+RCSUTIL.C 226 1 :         delta->lockedby=next->login=who;
+RCSUTIL.C 251 1 :                                         name,next->delta->num);
+RCSUTIL.C 404 1 : 		commandname,delta->num,backward,forward,TotalDeltas,delta->date,
+RCSUTIL.C 404 1 : 		commandname,delta->num,backward,forward,TotalDeltas,delta->date,
+RLOG.C 303 1 :                                 currlock->delta->num);
+RLOG.C 321 1 :                            curassoc->delta->num);
+RLOG.C 834 1 :         pdelta->selector = 's';
+RLOG.C 837 1 :             while((pauthor != nil) && ( strcmp(pauthor->login, pdelta->author)!=0))
+RLOG.C 840 1 :                 pdelta->selector = 'u';
+RLOG.C 846 1 :             while((pstate != nil) && (strcmp(pstate->status, pdelta->state)!=0))
+RLOG.C 849 1 :                 pdelta->selector = 'u';
+RLOG.C 858 1 :                 pdelta->selector = 'u';
+RLOG.C 868 1 :                      if ( countnumflds(pdelta->num) ==(length+1))
+RLOG.C 869 1 :                         if ( (compartial(pdelta->num, prevision->strtrev,length) >= 0)&&
+RLOG.C 870 1 :                              (compartial(prevision->endrev, pdelta->num, length) >= 0) )
+RLOG.C 873 1 :                 else if ( countnumflds(pdelta->num ) == length)  /*  a revision */
+RLOG.C 874 1 :                     if ( (compartial(pdelta->num, prevision->strtrev, length) >= 0) &&
+RLOG.C 875 1 :                          (compartial(prevision->endrev, pdelta->num, length) >= 0) )
+RLOG.C 880 1 :                 pdelta->selector = 'u';

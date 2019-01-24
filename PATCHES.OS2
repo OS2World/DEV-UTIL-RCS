@@ -1,0 +1,1904 @@
+Only in rcs43-2: readme.os2
+Only in rcs43-2: patches.os2
+Only in rcs43-2/src: makefile.msc
+Only in rcs43-2/src: ci.cs
+Only in rcs43-2/src: ci.def
+Only in rcs43-2/src: co.cs
+Only in rcs43-2/src: co.def
+Only in rcs43-2/src: ident.cs
+Only in rcs43-2/src: ident.def
+Only in rcs43-2/src: rcs.cs
+Only in rcs43-2/src: rcs.def
+Only in rcs43-2/src: rcsclean.cs
+Only in rcs43-2/src: rcsclean.def
+Only in rcs43-2/src: rcsdiff.cs
+Only in rcs43-2/src: rcsdiff.def
+Only in rcs43-2/src: rcsmerge.cs
+Only in rcs43-2/src: rcsmerge.def
+Only in rcs43-2/src: rlog.cs
+Only in rcs43-2/src: rlog.def
+diff -cbBwr rcs43/src/ci.c rcs43-2/src/ci.c
+*** rcs43/src/ci.c	Wed Sep 19 19:02:52 1990
+--- rcs43-2/src/ci.c	Fri Sep 21 15:11:44 1990
+***************
+*** 179,184 ****
+--- 179,190 ----
+  
+  char * newRCSfilename, * diffilename;
+  char * RCSfilename,*workfilename,*expfilename,*newworkfilename;
++ 
++ #ifdef MSDOS
++ char tmpdir[NCPPN];
++ extern char *gettmpdir();
++ #endif /* MSDOS */
++ 
+  extern struct stat RCSstat, workstat; /* file status of RCS and work file   */
+  extern int  haveRCSstat, haveworkstat;/* status indicators                  */
+  
+***************
+*** 358,363 ****
+--- 364,372 ----
+                  faterror("Can't take both log and description from redirected stdin; use -ttextfile");
+          }
+          /* now handle all filenames */
++ #ifdef MSDOS
++ 	strcpy( tmpdir, gettmpdir());
++ #endif /* MSDOS */
+          do {
+          gendeltas[0] = nil;
+          copyflag=rewriteflag=false;
+***************
+*** 486,503 ****
+--- 495,532 ----
+                  if(!putdtext(newdelnum,newdelta.log,workfilename,frewrite)) continue;
+                  ffclose(frewrite); frewrite=NULL;
+          } else {
++ #ifdef MSDOS
++                 diffilename=mktempfile(tmpdir,DIFFILE);
++ #else
+                  diffilename=mktempfile("/tmp/",DIFFILE);
++ #endif /* MSDOS */
+                  if (&newdelta==Head) {
+                          /* prepend new one */
+                          rewriteflag=false;
+                          if (!(expfilename=
++ #ifdef MSDOS
++                               buildrevision(gendeltas,targetdelta,tmpdir,false))) continue;
++ #else
+                                buildrevision(gendeltas,targetdelta,"/tmp/",false))) continue;
++ #endif /* MSDOS */
+                          if (!mustcheckin(expfilename,targetdelta)) continue;
+                                  /* don't check in files that aren't different, unless forced*/
+                          newdelta.log=getlogmsg();
+                          exit_stats = run((char*)nil, diffilename,
++ #ifdef MSDOS
++ #	ifdef GNUDIFF
++ 				DIFF,"-a","-n",workfilename,expfilename, (char*)nil);
++ #	elif MKS
++ 				DIFF,"-n",workfilename,expfilename, (char*)nil);
++ #	endif
++ #else
+  				DIFF,"-n",workfilename,expfilename, (char*)nil);
++ #endif /* MSDOS */
++ #ifdef MSDOS
++                         if (exit_stats != 0 && exit_stats != 1 )
++ #else
+                          if (exit_stats != 0 && exit_stats != (1 << BYTESIZ))
++ #endif /* MSDOS */
+                              faterror ("diff failed");
+                          /* diff returns 2 in the upper byte on failure */
+                          if(!putdtext(newdelnum,newdelta.log,workfilename,frewrite)) continue;
+***************
+*** 506,518 ****
+--- 535,563 ----
+                          /* insert new delta text */
+                          rewriteflag=true;
+                          if (!(expfilename=
++ #ifdef MSDOS
++                               buildrevision(gendeltas,targetdelta,tmpdir,false))) continue;
++ #else
+                                buildrevision(gendeltas,targetdelta,"/tmp/",false))) continue;
++ #endif /* MSDOS */
+                          if (!mustcheckin(expfilename,targetdelta)) continue;
+                                  /* don't check in files that aren't different, unless forced*/
+                          newdelta.log=getlogmsg();
+                          exit_stats = run((char*)nil, diffilename,
++ #ifdef MSDOS
++ #ifdef GNUDIFF
++ 				DIFF,"-a","-n",expfilename,workfilename, (char*)nil);
++ #	elif MKS
++ 				DIFF,"-n",expfilename,workfilename, (char*)nil);
++ #	endif
++ #else
+  				DIFF,"-n",expfilename,workfilename, (char*)nil);
++ #endif /* MSDOS */
++ #ifdef MSDOS
++                         if (exit_stats != 0 && exit_stats != 1 )
++ #else
+                          if (exit_stats != 0 && exit_stats != (1 << BYTESIZ))
++ #endif /* MSDOS */
+                              faterror ("diff failed");
+                          if(!putdtext(newdelnum,newdelta.log,diffilename,frewrite)) continue;
+                  }
+***************
+*** 520,528 ****
+--- 565,578 ----
+                  /* rewrite rest of RCS file */
+                  fastcopy(finptr,frewrite);
+                  ffclose(frewrite); frewrite=NULL;
++                 ffclose(finptr);   finptr=NULL;
+          }
+  	ignoreints();
++ #ifdef MSDOS
++         if (Rename(newRCSfilename,RCSfilename)<0) {
++ #else
+          if (rename(newRCSfilename,RCSfilename)<0) {
++ #endif /* MSDOS */
+                  error("Can't write new RCS file %s; saved in %s",
+                        RCSfilename,newRCSfilename);
+                  newRCSfilename[0]='\0'; /* avoid deletion by cleanup*/
+***************
+*** 532,538 ****
+--- 582,592 ----
+          }
+          newRCSfilename[0]='\0'; /* avoid re-unlinking by cleanup()*/
+  
++ #ifdef MSDOS
++ 	newRCSmode= (initflag|rcsinitflag?workstat.st_mode:RCSstat.st_mode)& ~S_IWRITE;
++ #else
+  	newRCSmode= (initflag|rcsinitflag?workstat.st_mode:RCSstat.st_mode)& ~0222;
++ #endif /* MSDOS */
+  	/* newRCSmode is also used to adjust mode of working file for -u and -l */
+  	if (chmod(RCSfilename,newRCSmode)<0)
+                  warn("Can't set mode of %s",RCSfilename);
+***************
+*** 550,556 ****
+--- 604,614 ----
+                  xpandfile(workfilename,workfilename /*for directory*/,&newdelta);
+                  if (!newworkfilename) continue; /* expand failed */
+  		ignoreints();
++ #ifdef MSDOS
++ 		if (Rename(newworkfilename,workfilename) <0) {
++ #else
+  		if (rename(newworkfilename,workfilename) <0) {
++ #endif /* MSDOS */
+                      error("Can't expand keywords in %s",workfilename);
+                      restoreints();
+                      continue;
+***************
+*** 628,634 ****
+--- 686,696 ----
+                  } else {
+                      /* no existing lock; try Dbranch */
+                      /* update newdelnum */
++ #ifdef MSDOS
++                     if (!(StrictLocks==false) ) {
++ #else
+                      if (!((StrictLocks==false) && (getuid() == RCSstat.st_uid))) {
++ #endif /* MSDOS */
+                          error("no lock set by %s",caller);
+                          return false;
+                      }
+***************
+*** 797,803 ****
+--- 859,869 ----
+                  next->delta->lockedby=nil; /* reset locked-by */
+                  return next->delta;
+          } else {
++ #ifdef MSDOS
++                 if (!(StrictLocks==false) ) {
++ #else
+                  if (!((StrictLocks==false) && (getuid() == RCSstat.st_uid))) {
++ #endif /* MSDOS */
+                      error("no lock set by %s for revision %s",who,num);
+                      return nil;
+                  } else {
+***************
+*** 945,951 ****
+--- 1011,1021 ----
+  
+          /* now read string from stdin */
+          if (ttystdin()) {
++ #ifdef MSDOS
++                 VOID fputs("enter log message:\n(terminate with ^Z or single '.')\n>> ",stderr);
++ #else
+                  VOID fputs("enter log message:\n(terminate with ^D or single '.')\n>> ",stderr);
++ #endif /* MSDOS */
+          } else {  /* redirected stdin */
+                  if (stdinread>0)
+                      faterror("Can't reread redirected stdin for log message; use -m");
+diff -cbBwr rcs43/src/co.c rcs43-2/src/co.c
+*** rcs43/src/co.c	Tue Nov 06 19:37:10 1990
+--- rcs43-2/src/co.c	Tue Nov 06 19:40:30 1990
+***************
+*** 152,157 ****
+--- 152,161 ----
+  
+  char * newRCSfilename, * neworkfilename;
+  char * RCSfilename, * workfilename;
++ #ifdef MSDOS
++ char tmpdir[NCPPN];
++ char *gettmpdir();
++ #endif /* MSDOS */
+  extern struct stat RCSstat, workstat; /* file status of RCS and work file   */
+  extern int  haveRCSstat, haveworkstat;/* status indicators                  */
+  
+***************
+*** 242,252 ****
+--- 246,260 ----
+                          break;
+  
+                  case 'j':
++ #ifdef MSDOS /* Current Version can't treat join */
++ 			faterror("Current Version can't treat join");
++ #else
+                          if ((*argv)[2]!='\0'){
+                                  if (join!=nil)warn("Redefinition of -j option");
+                                  join = (*argv)+2;
+                          }
+                          break;
++ #endif /* MSDOS */
+  
+                  case 's':
+                          if ((*argv)[2]!='\0'){
+***************
+*** 270,275 ****
+--- 278,286 ----
+  
+          if (argc<1) faterror("No input file\n%s",cmdusage);
+  
++ #ifdef MSDOS
++ 	strcpy( tmpdir, gettmpdir() );
++ #endif /* MSDOS */
+          /* now handle all filenames */
+          do {
+          rewriteflag=false;
+***************
+*** 353,359 ****
+--- 364,374 ----
+                  getdesc(false); /* don't echo*/
+  
+                  if (!(neworkfilename=buildrevision(gendeltas,targetdelta,
++ #ifdef MSDOS
++                       tostdout?(join!=nil? tmpdir:(char *)nil):workfilename,true)))
++ #else
+                        tostdout?(join!=nil?"/tmp/":(char *)nil):workfilename,true)))
++ #endif /* MSDOS */
+                                  continue;
+  
+                  if ((lockflag||killock==1)&&nerror==0) {
+***************
+*** 360,367 ****
+--- 375,387 ----
+                          /* rewrite the rest of the RCSfile */
+                          fastcopy(finptr,frewrite);
+                          ffclose(frewrite); frewrite=NULL;
++                         ffclose(finptr);   finptr=NULL;
+  			ignoreints();
++ #ifdef MSDOS
++                         if (Rename(newRCSfilename,RCSfilename) != 0 ) {
++ #else
+                          if (rename(newRCSfilename,RCSfilename)<0) {
++ #endif /* MSDOS */
+                                  error("Can't rewrite %s; saved in: %s",
+                                  RCSfilename, newRCSfilename);
+                                  newRCSfilename[0]='\0'; /* avoid deletion*/
+***************
+*** 369,375 ****
+--- 389,399 ----
+                                  break;
+                          }
+                          newRCSfilename[0]='\0'; /* avoid re-deletion by cleanup()*/
++ #ifdef MSDOS
++                         if (chmod(RCSfilename,RCSstat.st_mode & ~S_IWRITE)<0)
++ #else
+                          if (chmod(RCSfilename,RCSstat.st_mode & ~0222)<0)
++ #endif /* MSDOS */
+                              warn("Can't preserve mode of %s",RCSfilename);
+                          restoreints();
+                  }
+***************
+*** 383,389 ****
+--- 407,417 ----
+  			if (!buildjoin(neworkfilename)) continue;
+                  }
+                  if (!tostdout) {
++ #ifdef MSDOS
++ 			if (Rename(neworkfilename,workfilename) <0) {
++ #else
+  			if (rename(neworkfilename,workfilename) <0) {
++ #endif /* MSDOS */
+                                  error("Can't create %s; see %s",workfilename,neworkfilename);
+                                  neworkfilename[0]= '\0'; /*avoid deletion*/
+                                  continue;
+***************
+*** 423,429 ****
+--- 451,461 ----
+          if (haveworkstat< 0)      /* File doesn't exist; set by pairfilenames*/
+              return (true);        /* No problem */
+  
++ #ifdef MSDOS
++ 	if ((workstat.st_mode & S_IWRITE)&&!forceflag) {    /* File is writable */
++ #else
+  	if ((workstat.st_mode & 0222)&&!forceflag) {    /* File is writable */
++ #endif /* MSDOS */
+              if (!quietflag) {
+                  VOID fprintf(stderr,"writable %s exists; overwrite? [ny](n): ",workfilename);
+                  /* must be stderr in case of IO redirect */
+***************
+*** 439,444 ****
+--- 471,479 ----
+              }
+          }
+  	/* now unlink: either not writable, forceflag, or permission given */
++ #ifdef MSDOS
++         chmod(workfilename, S_IREAD | S_IWRITE);
++ #endif
+          if (unlink(workfilename) != 0) {            /* Remove failed   */
+              error("Can't unlink %s",workfilename);
+              return false;
+***************
+*** 612,619 ****
+--- 647,659 ----
+          char * rev2, * rev3;
+          int i;
+  
++ #ifdef MSDOS
++         rev2=mktempfile(tmpdir,JOINFIL2);
++         rev3=mktempfile(tmpdir,JOINFIL3);
++ #else
+          rev2=mktempfile("/tmp/",JOINFIL2);
+          rev3=mktempfile("/tmp/",JOINFIL3);
++ #endif /* MSDOS */
+  
+          i=0;
+          while (i<lastjoin) {
+diff -cbBwr rcs43/src/ident.c rcs43-2/src/ident.c
+*** rcs43/src/ident.c	Wed Sep 19 19:02:56 1990
+--- rcs43-2/src/ident.c	Fri Sep 21 15:07:46 1990
+***************
+*** 104,110 ****
+--- 104,114 ----
+     }
+  
+     while ( --argc > 0 ) {
++ #ifdef MSDOS
++ 	  if ( (fp = fopen(*++argv, "rb") ) == NULL ) {
++ #else
+        if ( (fp = fopen(*++argv, "r") ) == NULL ) {
++ #endif
+           VOID fprintf(stderr,  "ident error: can't open %s\n", *argv);
+           continue;
+        } else {
+diff -cbBwr rcs43/src/partime.c rcs43-2/src/partime.c
+*** rcs43/src/partime.c	Wed Sep 19 19:02:52 1990
+--- rcs43-2/src/partime.c	Fri Sep 21 15:11:46 1990
+***************
+*** 468,474 ****
+  {	register char *cp, *mp;
+  	register int c;
+  	struct tmwent *lastptr;
+! 	struct integ { int word; };   /* For getting at array ptr */
+  	int i;
+  
+  	lastptr = 0;
+--- 468,474 ----
+  {	register char *cp, *mp;
+  	register int c;
+  	struct tmwent *lastptr;
+! 	struct integ { long word; };   /* For getting at array ptr */
+  	int i;
+  
+  	lastptr = 0;
+diff -cbBwr rcs43/src/rcs.c rcs43-2/src/rcs.c
+*** rcs43/src/rcs.c	Wed Sep 19 19:02:54 1990
+--- rcs43-2/src/rcs.c	Fri Sep 21 15:11:50 1990
+***************
+*** 192,197 ****
+--- 192,202 ----
+  struct  access  *curaccess,  *rmaccess;
+  struct  hshentry        * gendeltas[hshsize];
+  
++ #ifdef MSDOS
++ extern char *gettmpdir();
++ char	tmpdir[NCPPN];
++ #endif /* MSDOS */
++ 
+  struct  Lockrev {
+          char    * revno;
+          struct  Lockrev   * nextrev;
+***************
+*** 449,455 ****
+              diagnose("%s aborted",cmdid);
+              exit(1);
+          }
+! 
+          /* now handle all filenames */
+          do {
+          rewriteflag = false;
+--- 454,462 ----
+              diagnose("%s aborted",cmdid);
+              exit(1);
+          }
+! #ifdef MSDOS
+! 	strcpy( tmpdir, gettmpdir() );
+! #endif /* MSDOS */
+          /* now handle all filenames */
+          do {
+          rewriteflag = false;
+***************
+*** 557,564 ****
+--- 564,576 ----
+  
+  
+          /* prepare for rewriting the RCS file */
++ #ifdef MSDOS
++         newRCSfilename=mktempfile(RCSfilename,NEWRCSFILE);
++         oldumask = umask(S_IWRITE); /* turn off write bits */
++ #else
+          newRCSfilename=mktempfile(RCSfilename,NEWRCSFILE);
+          oldumask = umask(0222); /* turn off write bits */
++ #endif /* MSDOS */
+          if ((frewrite=fopen(newRCSfilename, "w"))==NULL) {
+                  VOID fclose(finptr);
+                  error("Can't open file %s",newRCSfilename);
+***************
+*** 584,592 ****
+--- 596,609 ----
+              }
+          }
+          ffclose(frewrite);   frewrite = NULL;
++         ffclose(finptr);     finptr=NULL;
+          if ( ! nerror ) {  /*  move temporary file to RCS file if no error */
+  	    ignoreints();		/* ignore interrupts */
++ #ifdef MSDOS
++             if(Rename(newRCSfilename,RCSfilename)<0) {
++ #else
+              if(rename(newRCSfilename,RCSfilename)<0) {
++ #endif /* MSDOS */
+                  error("Can't create RCS file %s; saved in %s",
+                     RCSfilename, newRCSfilename);
+                  newRCSfilename[0] = '\0';  /*  avoid deletion by cleanup  */
+***************
+*** 1022,1028 ****
+--- 1039,1049 ----
+          if (response=='\n'||response=='n'||response=='N') return false;
+  
+          /* go ahead with breaking  */
++ #ifdef MSDOS
++         messagefile=mktempfile( tmpdir, "mmXXXXXX");
++ #else
+          messagefile=mktempfile("/tmp/", "RCSmailXXXXXX");
++ #endif /* MSDOS */
+          if ( (mailmess = fopen(messagefile, "w")) == NULL) {
+              faterror("Can't open file %s", messagefile);
+          }
+***************
+*** 1490,1500 ****
+--- 1511,1529 ----
+          int  i, c, exit_stats;
+  
+          cuttail->selector = DELETE;
++ #ifdef MSDOS
++         initeditfiles( tmpdir );
++ #else
+          initeditfiles("/tmp/");
++ #endif /* MSDOS */
+          scanlogtext(deltas[0], copy);
+          i = 1;
+          if ( cuthead )  {
++ #ifdef MSDOS
++             cutfilename=mktempfile( tmpdir, "ctXXXXXX");
++ #else
+              cutfilename=mktempfile("/tmp/", "RCScutXXXXXX");
++ #endif /* MSDOS */
+              if ( (fcut = fopen(cutfilename, "w")) == NULL) {
+                  faterror("Can't open temporary file %s", cutfilename);
+              }
+***************
+*** 1514,1523 ****
+--- 1543,1568 ----
+          finishedit((struct hshentry *)nil);    ffclose(fcopy);
+  
+          if ( cuthead ) {
++ #ifdef MSDOS
++             diffilename=mktempfile( tmpdir, "dfXXXXXX");
++ #else
+              diffilename=mktempfile("/tmp/", "RCSdifXXXXXX");
++ #endif /* MSDOS */
+              exit_stats = run((char*)nil,diffilename,
++ #ifdef MSDOS
++ #	ifdef GNUDIFF
++ 			DIFF,"-n","-a",cutfilename,resultfile,(char*)nil);
++ #	elif MKS
++ 			DIFF,"-n",cutfilename,resultfile,(char*)nil);
++ #	endif
++ #else
+  			DIFF,"-n",cutfilename,resultfile,(char*)nil);
++ #endif /* MSDOS */
++ #ifdef MSDOS
++             if (exit_stats != 0 && exit_stats != 1 )
++ #else
+              if (exit_stats != 0 && exit_stats != (1 << BYTESIZ))
++ #endif /* MSDOS */
+                  faterror ("diff failed");
+              if(!putdtext(cuttail->num,curlogmsg,diffilename,frewrite)) return;
+          }
+diff -cbBwr rcs43/src/rcsbase.h rcs43-2/src/rcsbase.h
+*** rcs43/src/rcsbase.h	Wed Sep 19 19:02:54 1990
+--- rcs43-2/src/rcsbase.h	Fri Sep 21 15:17:16 1990
+***************
+*** 127,132 ****
+--- 127,135 ----
+  
+  
+  #include <stdio.h>
++ #ifdef MKS
++ #define STREQ(a,b)	( strcmp( (a), (b) ) == 0 )
++ #endif
+  #ifdef USG
+  #include <string.h>
+  #else
+***************
+*** 137,143 ****
+--- 140,150 ----
+  
+  #ifdef USG
+  #       define rindex    strrchr
++ #ifdef MSDOS
++ #       define DATEFORM  "%02d.%02d.%02d.%02d.%02d.%02d"
++ #else
+  #       define DATEFORM  "%.2d.%.2d.%.2d.%.2d.%.2d.%.2d"
++ #endif
+  #else
+  #       define DATEFORM  "%02d.%02d.%02d.%02d.%02d.%02d"
+  #endif
+***************
+*** 175,182 ****
+--- 182,194 ----
+  #define datelength         20 /* length of a date in RCS format             */
+  #define joinlength         20 /* number of joined revisions permitted       */
+  #define RCSDIR         "RCS/" /* subdirectory for RCS files                 */
++ #ifdef MSDOS		/* Added by $Author: lfk $ */
++ #define RCSSUF            '\0' /* suffix for RCS files                       */
++ #define RCSSEP            '\0' /* separator for RCSSUF                       */
++ #else
+  #define RCSSUF            'v' /* suffix for RCS files                       */
+  #define RCSSEP            ',' /* separator for RCSSUF                       */
++ #endif /* MSDOS */
+  #define KDELIM            '$' /* delimiter for keywords                     */
+  #define VDELIM            ':' /* separates keywords from values             */
+  #define DEFAULTSTATE    "Exp" /* default state of revisions                 */
+***************
+*** 184,191 ****
+--- 196,208 ----
+  #  define NCPFN           256 /* number of characters per filename          */
+  #  define NCPPN          1024 /* number of characters per pathname          */
+  #else
++ #ifdef MSDOS		/* support OS/2 HPFS */
++ #  define NCPFN           256 /* number of characters per filename          */
++ #  define NCPPN       	  256 /* number of characters per pathname          */
++ #else
+  #  define NCPFN            14 /* number of characters per filename          */
+  #  define NCPPN       6*NCPFN /* number of characters per pathname          */
++ #endif /* MSDOS */
+  #endif
+  #define keylength          20 /* buffer length for expansion keywords       */
+  #define keyvallength NCPPN+revlength+datelength+60
+***************
+*** 202,207 ****
+--- 219,233 ----
+  
+  /* temporary file names */
+  
++ #ifdef MSDOS			/* Added by $Author: lfk $ */
++ #define NEWRCSFILE  "nwXXXXXX"
++ #define DIFFILE     "ciXXXXXX"
++ #define TMPFILE1    "t1XXXXXX"
++ #define TMPFILE2    "t2XXXXXX"
++ #define TMPFILE3    "t3XXXXXX"
++ #define JOINFIL2    "j2XXXXXX"
++ #define JOINFIL3    "j3XXXXXX"
++ #else
+  #define NEWRCSFILE  ",RCSnewXXXXXX"
+  #define DIFFILE     ",RCSciXXXXXX"
+  #define TMPFILE1    ",RCSt1XXXXXX"
+***************
+*** 209,214 ****
+--- 235,241 ----
+  #define TMPFILE3    ",RCSt3XXXXXX"
+  #define JOINFIL2    ",RCSj2XXXXXX"
+  #define JOINFIL3    ",RCSj3XXXXXX"
++ #endif /* MSDOS */
+  
+  
+  #define putc(x,p) (--(p)->_cnt>=0? ((int)(*(p)->_ptr++=(unsigned)(x))):fflsbuf((unsigned)(x),p))
+***************
+*** 218,224 ****
+--- 245,255 ----
+  /* GETC modifies a local variable c; a kludge, but smaller and faster.      */
+  /* GETC writes a del-character (octal 177) on end of file                   */
+  
++ #ifdef MSDOS
++ #define WORKMODE(RCSmode) (RCSmode & ~S_IWRITE)|((lockflag||!StrictLocks)? ( S_IWRITE | S_IREAD ) : 0000 )
++ #else
+  #define WORKMODE(RCSmode) (RCSmode&~0222)|((lockflag||!StrictLocks)?0600:0000)
++ #endif /* MSDOS */
+  /* computes mode of working file: same as RCSmode, but write permission     */
+  /* determined by lockflag and StrictLocks.                                  */
+  
+diff -cbBwr rcs43/src/rcsclean.c rcs43-2/src/rcsclean.c
+*** rcs43/src/rcsclean.c	Wed Sep 19 19:02:56 1990
+--- rcs43-2/src/rcsclean.c	Fri Sep 21 16:25:54 1990
+***************
+*** 66,71 ****
+--- 66,73 ----
+   *
+   */
+  #include "rcsbase.h"
++ #include <sys/types.h>
++ #include <sys/stat.h>
+  #define ERRCODE 2                   /*error code for exit status            */
+  #ifndef lint
+  static char rcsbaseid[] = RCSBASE;
+***************
+*** 82,87 ****
+--- 84,94 ----
+  extern FILE * finptr;               /* RCS input file                       */
+  extern FILE * fopen();
+  
++ #ifdef MSDOS
++ extern char *gettmpdir();
++ char tmpdir[NCPPN];
++ #endif /* MSDOS */
++ 
+  char *RCSfilename;
+  char *workfilename;
+  char * tempfile;
+***************
+*** 130,135 ****
+--- 137,146 ----
+  
+  	if (argc<1) fterror("No input file\n%s", cmdusage);
+  
++ #ifdef MSDOS
++ 	strcpy( tmpdir, gettmpdir() );
++ #endif /* MSDOS */
++ 
+          /* now handle all filenames */
+          do {
+                  finptr=NULL;
+***************
+*** 159,165 ****
+--- 170,180 ----
+  		if (!expandsym(rev,numericrev)) continue;
+                  if (!(target=genrevs(numericrev,(char *)nil,(char *)nil,(char *)nil,gendeltas))) continue;
+  
++ #ifdef MSDOS
++ 		tempfile=mktempfile( tmpdir ,TMPFILE1);
++ #else
+  		tempfile=mktempfile("/tmp/",TMPFILE1);
++ #endif /* MSDOS */
+  		diagnose("retrieving revision %s",target->num);
+                  VOID sprintf(command,"%s -q -p%s %s > %s\n",
+  			CO ,target->num,RCSfilename,tempfile);
+***************
+*** 182,191 ****
+--- 197,209 ----
+  				/* identical files; can remove working file */
+  				result=0;
+  				diagnose("files identical; %s removed",workfilename);
++                                 fclose(file2);
++                                 chmod(workfilename, S_IREAD | S_IWRITE);
+  				if (unlink(workfilename)!=0) {
+  					error("Can't unlink %s",workfilename);
+  				}
+  				if (findlock(caller, false)) {
++                                     VOID fclose(finptr); finptr=NULL;
+  				    VOID sprintf(command,"%s -q -u%s %s\n",
+  						 RCS_CMD, target->num, RCSfilename);
+  				    if (system(command)) {
+diff -cbBwr rcs43/src/rcsdiff.c rcs43-2/src/rcsdiff.c
+*** rcs43/src/rcsdiff.c	Wed Sep 19 19:02:56 1990
+--- rcs43-2/src/rcsdiff.c	Fri Sep 21 15:10:10 1990
+***************
+*** 111,116 ****
+--- 111,122 ----
+  char *workfilename;
+  char * temp1file, * temp2file;
+  
++ #ifdef MSDOS
++ int old_stdout;
++ char *gettmpdir();
++ char tmpdir[NCPPN];
++ #endif /* MSDOS */
++ 
+  char bops[10];
+  char otherops[10];
+  
+***************
+*** 197,202 ****
+--- 203,212 ----
+  	}
+  	if (argc<1) fterror("No input file\n%s",cmdusage);
+  
++ #ifdef MSDOS
++ 	strcpy( tmpdir, gettmpdir() );
++ 	old_stdout = dup(1);
++ #endif /* MSDOS */
+          /* now handle all filenames */
+          do {
+                  finptr=NULL;
+***************
+*** 231,237 ****
+--- 241,251 ----
+                  }
+  
+  
++ #ifdef MSDOS
++                 temp1file=mktempfile(tmpdir,TMPFILE1);
++ #else
+                  temp1file=mktempfile("/tmp/",TMPFILE1);
++ #endif /* MSDOS */
+                  diagnose("retrieving revision %s",xrev1);
+                  VOID sprintf(commarg,"-p%s",xrev1);
+                  if (run((char*)nil,temp1file, co,"-q",commarg,RCSfilename,(char*)nil)){
+***************
+*** 242,248 ****
+--- 256,266 ----
+                          temp2file=workfilename;
+                          diagnose("diff%s%s -r%s %s",boption,otheroption,xrev1,workfilename);
+                  } else {
++ #ifdef MSDOS
++                         temp2file=mktempfile(tmpdir,TMPFILE2);
++ #else
+                          temp2file=mktempfile("/tmp/",TMPFILE2);
++ #endif /* MSDOS */
+                          diagnose("retrieving revision %s",xrev2);
+  			VOID sprintf(commarg,"-p%s",xrev2);
+                          if (run((char*)nil,temp2file, co,"-q",commarg,RCSfilename,(char *)nil)){
+***************
+*** 251,267 ****
+                          }
+                          diagnose("diff%s%s -r%s -r%s",boption,otheroption,xrev1,xrev2);
+                  }
+! 
+                  exit_stats =
+  			*boption
+  			? *otheroption
+  			  ? run((char*)nil,(char*)nil, DIFF, boption+1,	otheroption+1,	temp1file,temp2file,(char*)nil)
+  			  : run((char*)nil,(char*)nil, DIFF, boption+1,			temp1file,temp2file,(char*)nil)
+  			: *otheroption
+  			  ? run((char*)nil,(char*)nil, DIFF, 		otheroption+1,	temp1file,temp2file,(char*)nil)
+  			  : run((char*)nil,(char*)nil, DIFF, 				temp1file,temp2file,(char*)nil);
+  
+                  if (exit_stats == (1 << BYTESIZ))
+  			diffs_found = 1;
+                  else if (exit_stats != 0) {
+                          error ("diff failed");
+--- 269,312 ----
+                          }
+                          diagnose("diff%s%s -r%s -r%s",boption,otheroption,xrev1,xrev2);
+                  }
+! #ifdef MSDOS
+! #	ifdef MKS
+! 		dup2( old_stdout, 1 );
+!                 exit_stats =
+! 			*boption
+! 			? *otheroption
+! 			  ? spawnlp( 0, DIFF, DIFF, boption+1, otheroption+1, temp1file,temp2file,NULL)
+! 			  : spawnlp( 0, DIFF, DIFF, boption+1, temp1file, temp2file, NULL)
+! 			: *otheroption
+! 			  ? spawnlp( 0, DIFF, DIFF, otheroption+1, temp1file,temp2file, NULL)
+! 			  : spawnlp( 0, DIFF, DIFF, temp1file, temp2file, NULL);
+! #	else
+! 		dup2( old_stdout, 1 );
+                  exit_stats =
+  			*boption
+  			? *otheroption
++ 			  ? spawnlp( 0, DIFF, DIFF, "-a", boption+1, otheroption+1, temp1file,temp2file,NULL)
++ 			  : spawnlp( 0, DIFF, DIFF, "-a", boption+1, temp1file, temp2file, NULL)
++ 			: *otheroption
++ 			  ? spawnlp( 0, DIFF, DIFF, "-a", otheroption+1, temp1file,temp2file, NULL)
++ 			  : spawnlp( 0, DIFF, DIFF, "-a", temp1file, temp2file, NULL);
++ #	endif
++ #else
++                 exit_stats =
++ 			*boption
++ 			? *otheroption
+  			  ? run((char*)nil,(char*)nil, DIFF, boption+1,	otheroption+1,	temp1file,temp2file,(char*)nil)
+  			  : run((char*)nil,(char*)nil, DIFF, boption+1,			temp1file,temp2file,(char*)nil)
+  			: *otheroption
+  			  ? run((char*)nil,(char*)nil, DIFF, 		otheroption+1,	temp1file,temp2file,(char*)nil)
+  			  : run((char*)nil,(char*)nil, DIFF, 				temp1file,temp2file,(char*)nil);
++ #endif /* MSDOS */
+  
++ #ifdef MSDOS
++                 if (exit_stats == 1 )
++ #else
+                  if (exit_stats == (1 << BYTESIZ))
++ #endif /* MSDOS */
+  			diffs_found = 1;
+                  else if (exit_stats != 0) {
+                          error ("diff failed");
+diff -cbBwr rcs43/src/rcsedit.c rcs43-2/src/rcsedit.c
+*** rcs43/src/rcsedit.c	Wed Sep 19 19:02:52 1990
+--- rcs43-2/src/rcsedit.c	Fri Sep 21 15:57:46 1990
+***************
+*** 474,480 ****
+--- 474,484 ----
+  	case Header:
+  		VOID putc(VDELIM,out); VOID putc(' ',out);
+  		if (marker==Id)
++ #ifdef MSDOS
+  			 VOID fputs(bindex(RCSfilename,'/'),out);
++ #	else
++ 			 VOID fputs(bindex(RCSfilename,'/'),out);
++ #endif /* MSDOS */
+  		else     VOID fputs(getfullRCSname(),out);
+  		VOID fprintf(out," %s ", delta->num);
+                  VOID PRINTDATE(out,date);VOID putc(' ',out);VOID PRINTTIME(out,date);
+***************
+*** 490,495 ****
+--- 494,500 ----
+          case Log:
+                  VOID fprintf(out, "%c\t%s %c\n%sRevision %s  ",
+                          VDELIM, bindex(RCSfilename,'/'), KDELIM, Comment, delta->num);
++              /* VDELIM, bindex(RCSfilename,'\\'), KDELIM, Comment, delta->num); */
+                  VOID PRINTDATE(out,date);VOID fputs("  ",out);VOID PRINTTIME(out,date);
+                  VOID fprintf(out, "  %s\n%s",delta->author,Comment);
+                  /* do not include state here because it may change and is not updated*/
+***************
+*** 498,503 ****
+--- 503,509 ----
+                  /* Comment is the comment leader */
+                  break;
+          case RCSfile:
++              /* VOID fprintf(out,"%c %s %c",VDELIM,bindex(RCSfilename,'\\'),KDELIM); */
+                  VOID fprintf(out,"%c %s %c",VDELIM,bindex(RCSfilename,'/'),KDELIM);
+                  break;
+          case Revision:
+***************
+*** 513,518 ****
+                  VOID putc(KDELIM,out);
+                  break;
+          }
+- }
+- 
+  
+--- 519,522 ----
+diff -cbBwr rcs43/src/rcsfnms.c rcs43-2/src/rcsfnms.c
+*** rcs43/src/rcsfnms.c	Wed Sep 19 19:02:54 1990
+--- rcs43-2/src/rcsfnms.c	Fri Sep 21 15:19:02 1990
+***************
+*** 120,126 ****
+--- 120,131 ----
+  #include "rcsbase.h"
+  #include <sys/types.h>
+  #include <sys/stat.h>
++ #ifdef MSDOS
++ #include <stdlib.h>
++ #include <direct.h>
++ #else
+  #include <sys/dir.h>
++ #endif /* MSDOS */
+  
+  extern char * rindex();
+  extern char * mktemp();
+***************
+*** 154,174 ****
+  /* table is used to guess the proper comment leader from the working file's */
+  /* suffix during initial ci (see InitAdmin()). Comment leaders are needed   */
+  /* for languages without multiline comments; for others they are optional.  */
+          "c",   " * ",   /* C           */
+  	"csh", "# ",    /* shell       */
+          "e",   "# ",    /* efl         */
+          "f",   "c ",    /* fortran     */
+          "h",   " * ",   /* C-header    */
+          "l",   " * ",   /* lex         NOTE: conflict between lex and franzlisp*/
+          "mac", "; ",    /* macro       vms or dec-20 or pdp-11 macro */
+  	"me",  ".\\\" ",/* me-macros   t/nroff*/
+  	"mm",  ".\\\" ",/* mm-macros   t/nroff*/
+  	"ms",  ".\\\" ",/* ms-macros   t/nroff*/
+          "p",   " * ",   /* pascal      */
+  	"pl",  "% ",	/* prolog      */
+          "r",   "# ",    /* ratfor      */
+          "red", "% ",    /* psl/rlisp   */
+! 
+  #ifdef sparc
+          "s",   "! ",    /* assembler   */
+  #endif
+--- 159,207 ----
+  /* table is used to guess the proper comment leader from the working file's */
+  /* suffix during initial ci (see InitAdmin()). Comment leaders are needed   */
+  /* for languages without multiline comments; for others they are optional.  */
++ /* According to your MSDOS-environment, you change these settlements. !!    */
++ /* If you can work on UN*X, it is worthwile to keep these.                  */
++ /* It however, may cause lack of memory on MSDOS                           */
++ /* $Author: lfk $                                                      */
++ 		"",		"# ",		/* default for empty suffix */
++ 		"awk",	"# ",		/* AWK */
+          "c",   " * ",   /* C           */
++ #ifdef ALL
++ 		"c++"	"// "		/* C++ */
++ 		"cc"	"// "		/* C++ */
++ 		"CC"	"// "		/* C++ */
++ 		"C"		"// "		/* C++ */
++ 		"cl",	";;; ",		/* common lisp */
+  	"csh", "# ",    /* shell       */
+          "e",   "# ",    /* efl         */
++ 		"el",	"; ",		/* gnulisp     */
++ #endif
+          "f",   "c ",    /* fortran     */
+          "h",   " * ",   /* C-header    */
++ 		"ksh",	"# ",		/* korn shell  */
+          "l",   " * ",   /* lex         NOTE: conflict between lex and franzlisp*/
+          "mac", "; ",    /* macro       vms or dec-20 or pdp-11 macro */
+  	"me",  ".\\\" ",/* me-macros   t/nroff*/
++ #ifdef ALL
++ 		"ml",	"; ",		/* mocklisp    */
++ #endif
+  	"mm",  ".\\\" ",/* mm-macros   t/nroff*/
+  	"ms",  ".\\\" ",/* ms-macros   t/nroff*/
++ #ifdef ALL
+          "p",   " * ",   /* pascal      */
++ 		"perl",	"# ",		/* L. Wall's Perl */
+  	"pl",  "% ",	/* prolog      */
+          "r",   "# ",    /* ratfor      */
+          "red", "% ",    /* psl/rlisp   */
+! 		"sh",	"# ",		/* shell       */
+! 		"sl",	"% ",		/* psl         */
+! #endif
+! 		"tex",	"% ",		/* tex	       */
+! 		"y",	" * ",		/* yacc        */
+! #ifdef ALL
+! 		"ye",	" * ",		/* yacc-efl    */
+! 		"yr",	" * ",		/* yacc-ratfor */
+! #endif
+  #ifdef sparc
+          "s",   "! ",    /* assembler   */
+  #endif
+***************
+*** 181,198 ****
+  #ifdef vax
+          "s",   "# ",    /* assembler   */
+  #endif
+! 
+!         "sh",  "# ",    /* shell       */
+!         "sl",  "% ",    /* psl         */
+!         "red", "% ",    /* psl/rlisp   */
+!         "cl",  ";;; ",  /* common lisp   */
+!         "ml",  "; ",    /* mocklisp    */
+!         "el",  "; ",    /* gnulisp     */
+! 	"tex", "% ",	/* tex	       */
+!         "y",   " * ",   /* yacc        */
+!         "ye",  " * ",   /* yacc-efl    */
+!         "yr",  " * ",   /* yacc-ratfor */
+!         "",    "# ",    /* default for empty suffix */
+          nil,   ""       /* default for unknown suffix; must always be last */
+  };
+  
+--- 214,228 ----
+  #ifdef vax
+          "s",   "# ",    /* assembler   */
+  #endif
+! #ifdef MSDOS
+! 		"asm",	"; ",	/* assembler   */
+! 		"bat",	"REM ",	/* MS-DOS command.com */
+! 		"cxx",	"// ",	/* MS-DOS c++ */
+! 		"fin",	".\\\" ",	/* for *.fin files on MSDOS */
+! 		"fma",	".\\\" ",	/* for fma-macors fin on MSDOS */
+! 		"for",	"c ",	/* MS Fortran */
+! 		"pl",	"# ",	/* L. Wall's Perl for MS-DOS */
+! #endif /* MSDOS */
+          nil,   ""       /* default for unknown suffix; must always be last */
+  };
+  
+***************
+*** 216,221 ****
+--- 246,252 ----
+   * The name of the semaphore file is put into variable semafilename.
+   */
+  {
++ #ifndef MSDOS
+          register char * tp, *sp, *lp;
+          int fdesc;
+  
+***************
+*** 249,254 ****
+--- 280,289 ----
+                       madesema=true;
+          }
+          return true;
++ #else /* NOT MSDOS */
++ 	makesema = true;
++ 	return true;
++ #endif /* NOT MSDOS */
+  }
+  
+  
+***************
+*** 257,262 ****
+--- 292,300 ----
+   * sets madesema to false.
+   */
+  {
++ #ifdef MSDOS
++ 	madesema = false ;
++ #else
+          if (madesema) {
+                  madesema=false;
+                  if (unlink(semafilename) == -1) {
+***************
+*** 263,272 ****
+                          error("Can't find semaphore file %s",semafilename);
+                  }
+          }
+  }
+  
+- 
+- 
+  InitCleanup()
+  {       freefilename =  0;  /* initialize pointer */
+  }
+--- 301,309 ----
+                          error("Can't find semaphore file %s",semafilename);
+                  }
+          }
++ #endif /* MSDOS */
+  }
+  
+  InitCleanup()
+  {       freefilename =  0;  /* initialize pointer */
+  }
+***************
+*** 303,312 ****
+--- 340,358 ----
+          register char * lastslash, *tp;
+          if ((tp=tfnames[freefilename])==nil)
+                tp=tfnames[freefilename] = talloc(NCPPN);
++ #ifdef MSDOS
++ 	if (fullpath!=nil)
++           if ( (lastslash=rindex(fullpath,'/'))!=0 ||
++                (lastslash=rindex(fullpath,'\\'))!=0) {
++                 /* copy path */
++                 while (fullpath<=lastslash) *tp++ = *fullpath++;
++           }
++ #else
+          if (fullpath!=nil && (lastslash=rindex(fullpath,'/'))!=0) {
+                  /* copy path */
+                  while (fullpath<=lastslash) *tp++ = *fullpath++;
+          }
++ #endif /* MSDOS */
+          while (*tp++ = *filename++);
+          return (mktemp(tfnames[freefilename++]));
+  }
+***************
+*** 342,347 ****
+--- 388,396 ----
+  
+          /* guess the comment leader from the suffix*/
+          Suffix=bindex(workfilename, '.');
++ #ifdef MSDOS
++ 	Suffix = strlwr( Suffix );
++ #endif /* MSDOS */
+          if (Suffix==workfilename) Suffix= ""; /* empty suffix; will get default*/
+          for (i=0;;i++) {
+                  if (comtable[i].suffix==nil) {
+***************
+*** 356,361 ****
+--- 405,422 ----
+  }
+  
+  
++ #ifdef MSDOS
++ void _unixpath(char *pathbuf)
++ {
++   int i;
++ 
++   strlwr(pathbuf);
++ 
++   for ( i = 0; i <= strlen(pathbuf); i++)
++     if(pathbuf[i] == '\\')
++       pathbuf[i] = '/';
++ }
++ #endif
+  
+  char * findpairfile(argc, argv, fname)
+  int argc; char * argv[], *fname;
+***************
+*** 369,375 ****
+--- 430,442 ----
+          register int count;
+  
+          for (next = argv, count = argc; count>0; next++,count--) {
++ #ifdef MSDOS
++ 		if ((*next != nil) &&
++                     (strcmp(bindex(*next,'/'),fname)==0 ||
++ 		     strcmp(bindex(*next,'\\'),fname)==0)) {
++ #	else
+                  if ((*next != nil) && strcmp(bindex(*next,'/'),fname)==0) {
++ #endif /* MSDOS */
+                          /* bindex finds the beginning of the file name stem */
+                          match= *next;
+                          *next=nil;
+***************
+*** 419,424 ****
+--- 486,495 ----
+          register char * sp, * tp;
+          char * lastsep, * purefname, * pureRCSname;
+          int opened, returncode;
++ #ifdef MSDOS
++         char *help;
++ 	struct stat dirstat;
++ #endif /* MSDOS */
+          char * RCS1;
+  	char prefdir[NCPPN];
+  
+***************
+*** 431,437 ****
+--- 502,554 ----
+          InitCleanup();
+  
+          /* first check suffix to see whether it is an RCS file or not */
++ #ifdef MSDOS
+  		purefname=bindex(*argv, '/'); /* skip path */
++ 	if ( (help=bindex(*argv, '\\')) > purefname )
++           purefname = help;
++ #else
++         purefname=bindex(*argv, '/'); /* skip path */
++ #endif /* MSDOS */
++ #ifdef MSDOS
++ 	if ( (pureRCSname = strstr(*argv, "rcs/")) != NULL ||
++ 	     (pureRCSname = strstr(*argv, "rcs\\")) != NULL ||
++ 	     (pureRCSname = strstr(*argv, "RCS\\")) != NULL ) {
++                 /* RCS file name given*/
++ 		RCS1 = (*argv);
++                 /* derive workfilename*/
++ 		sp = purefname; tp=tempfilename;
++ 		while( *sp != '\0' ) *tp++=*sp++; *tp= '\0';
++                 workfilename=findpairfile(argc-1,argv+1,tempfilename);
++ 		if( strlen(pureRCSname) > NCPFN + 4 ) {
++ 			/* To avoid, ambiguous file name. eg."RCS\RCS\foo.c" */
++ 			if( strlen(pureRCSname + 4) != (int) NULL ){
++ 				error("file name %s is ambiguous", RCS1);
++ 				return 0;
++ 			}
++ 			error("RCS file name %s too long",RCS1);
++ 			return 0;
++ 		}
++ 	} else {
++                 /* working file given; now try to find RCS file */
++ 		workfilename=*argv;
++ 		/* derive RCS file name*/
++ 		strcpy( tempfilename, "rcs/" );
++ 		strcat( tempfilename, purefname );
++                 RCS1=findpairfile(argc-1,argv+1,tempfilename);
++ 		if ( (pureRCSname = strstr(RCS1, "rcs/")) == NULL )
++ 		  if ( (pureRCSname = strstr(RCS1, "rcs\\")) == NULL )
++ 			pureRCSname = strstr( RCS1, "RCS\\" );
++ 		if (strlen(pureRCSname)>NCPFN+4) {
++                         error("working file name %s too long",workfilename);
++                         return 0;
++                 }
++         }
++ 	if( strchr( workfilename, '/' ) != NULL ||
++ 	    strchr( workfilename, '\\' ) != NULL ){
++ 		error("Sorry, file name %s confuses RCS", workfilename );
++ 		return 0;
++ 	}
++ #else /* MSDOS */
+          lastsep=rindex(purefname, RCSSEP);
+          if (lastsep!= 0 && *(lastsep+1)==RCSSUF && *(lastsep+2)=='\0') {
+                  /* RCS file name given*/
+***************
+*** 460,467 ****
+--- 577,612 ----
+                          return 0;
+                  }
+          }
++ #endif /* MSDOS */
+          /* now we have a (tentative) RCS filename in RCS1 and workfilename  */
+          /* Try to find the right RCS file */
++ #ifdef MSDOS
++ 	RCSfilename=pureRCSname;
++ 	if (pureRCSname != RCS1){
++ 		error("Sorry, file name %s confuse RCS", RCS1);
++ 		return 0;
++ 	}else{
++ 		opened = ( ( finptr=fopen(pureRCSname, "r" ) ) != NULL );
++ 		if(opened){
++ 			returncode = 1;
++ 		}else{
++                         if (mustread) {
++ 				error("Can't find %s",RCSfilename);
++                                 return 0;
++ 			}else{
++ 				if( stat("RCS", &dirstat) == -1 ){
++ 					error("Can't find RCS subdirectory");
++ 					return 0;
++ 				}else{
++ 					if( !( dirstat.st_mode & S_IFDIR ) ){
++ 						error("RCS is really directory?");
++ 						return 0;
++ 					}else returncode = -1;
++ 				}
++ 			}
++ 		}
++ 	}
++ #else /* MSDOS */
+          if (pureRCSname!=RCS1) {
+                  /* a path for RCSfile is given; single RCS file to look for */
+                  finptr=fopen(RCSfilename=RCS1, "r");
+***************
+*** 521,527 ****
+                          }
+                  }
+          }
+! 
+          if (returncode == 1) { /* RCS file open */
+                  haveRCSstat=fstat(fileno(finptr),&RCSstat);
+                  if ((haveRCSstat== 0) && ((RCSstat.st_mode & S_IFDIR) == S_IFDIR)) {
+--- 666,672 ----
+                          }
+                  }
+          }
+! #endif /* MSDOS */
+          if (returncode == 1) { /* RCS file open */
+                  haveRCSstat=fstat(fileno(finptr),&RCSstat);
+                  if ((haveRCSstat== 0) && ((RCSstat.st_mode & S_IFDIR) == S_IFDIR)) {
+***************
+*** 540,545 ****
+--- 685,694 ----
+                  /* file names was given in the argument list        */
+                  warn("Option -p is set; ignoring output file %s",workfilename);
+  
++ #ifdef MSDOS
++         _unixpath(RCSfilename);
++         _unixpath(workfilename);
++ #endif
+          return returncode;
+  }
+  
+***************
+*** 549,555 ****
+   * Calls getwd(), but only once.
+   * removes leading "../" and "./".
+   */
+! {       static char pathbuf[NCPPN];
+          static char namebuf[NCPPN];
+          static int  pathlength;
+  
+--- 698,712 ----
+   * Calls getwd(), but only once.
+   * removes leading "../" and "./".
+   */
+! {
+! #ifdef MSDOS
+!         static char pathbuf[NCPPN];
+! 
+!         _fullpath(pathbuf, RCSfilename, sizeof(pathbuf));
+!         _unixpath(pathbuf);
+!         return pathbuf;
+! #else
+!         static char pathbuf[NCPPN];
+          static char namebuf[NCPPN];
+          static int  pathlength;
+  
+***************
+*** 604,613 ****
+                      return(namebuf);
+                  }
+          }
+  }
+  
+! 
+! 
+  int trydiraccess(filename)
+  char * filename;
+  /* checks write permission in directory of filename and returns
+--- 761,771 ----
+                      return(namebuf);
+                  }
+          }
++ #endif
+  }
+  
+! /* In MSDOS and (perhaps) OS/2, any directries are writable. 	*/
+! /* So, the below check is NON-SENSE !! : $Author: lfk $ 		*/
+  int trydiraccess(filename)
+  char * filename;
+  /* checks write permission in directory of filename and returns
+***************
+*** 616,621 ****
+--- 774,783 ----
+  {
+          char pathname[NCPPN];
+          register char * tp, *sp, *lp;
++ 
++ #ifdef MSDOS
++ 	return true;
++ #else
+          lp = rindex(filename,'/');
+          if (lp==0) {
+                  /* check current directory */
+***************
+*** 637,642 ****
+--- 799,805 ----
+                  error("Directory %s not writable", pathname);
+                  return false;
+          }
++ #endif /* MSDOS */
+  }
+  
+  
+***************
+*** 644,650 ****
+  #ifndef V4_2BSD
+  /* rename() and getwd() will be provided in bsd 4.2 */
+  
+! 
+  int rename(from, to)
+  char * from, *to;
+  /* Function: renames a file with the name given by from to the name given by to.
+--- 807,813 ----
+  #ifndef V4_2BSD
+  /* rename() and getwd() will be provided in bsd 4.2 */
+  
+! #ifndef MSDOS
+  int rename(from, to)
+  char * from, *to;
+  /* Function: renames a file with the name given by from to the name given by to.
+***************
+*** 733,742 ****
+  fail:   VOID fclose(file);
+          return NULL;
+  }
+  
+! 
+  #endif
+  
+  
+  #ifdef PAIRTEST
+  /* test program for pairfilenames() and getfullRCSname() */
+--- 896,930 ----
+  fail:   VOID fclose(file);
+          return NULL;
+  }
++ #else /* MSDOS */
+  
+! char *getwd(name)
+! char	*name;
+! {
+! 	int a,i;
+! 	(void)getcwd(name, NCPPN);
+! 	strlwr(name);
+! 	a = strlen(name);
+! 	for ( i = 0; i <= a; i++)
+! 		if(name[i] == '\\')
+! 			name[i] = '/';
+! 	return name;
+! }
+! #endif /* MSODS */
+  #endif
++ #ifdef MSDOS
++ char *gettmpdir()
++ {
++ 	char tp[NCPPN];
++ 
++ 	strcpy( tp, (char *) getenv("TMP") );
++ 	if( *tp == (char) NULL ) strcpy( tp, "." );
++ 	if( tp[strlen(tp) - 1] != '\\' )
++ 		strcat( tp, "\\" );
++ 	return tp;
++ }
+  
++ #endif /* MSDOS */
+  
+  #ifdef PAIRTEST
+  /* test program for pairfilenames() and getfullRCSname() */
+diff -cbBwr rcs43/src/rcsgen.c rcs43-2/src/rcsgen.c
+*** rcs43/src/rcsgen.c	Wed Sep 19 19:02:56 1990
+--- rcs43-2/src/rcsgen.c	Fri Sep 21 15:08:02 1990
+***************
+*** 107,114 ****
+  extern FILE * fcopy;       /* result file during editing                    */
+  extern char * resultfile;  /* file name for fcopy                           */
+  extern int    rewriteflag; /* indicates whether to rewrite the input file   */
+  
+- 
+  char    curlogmsg[logsize]; /* buffer for current log message                */
+  
+  enum stringwork {copy, edit, expand, edit_expand };
+--- 107,116 ----
+  extern FILE * fcopy;       /* result file during editing                    */
+  extern char * resultfile;  /* file name for fcopy                           */
+  extern int    rewriteflag; /* indicates whether to rewrite the input file   */
++ #ifdef MSDOS
++ extern char tmpdir[NCPPN];
++ #endif /* MSDOS */
+  
+  char    curlogmsg[logsize]; /* buffer for current log message                */
+  
+  enum stringwork {copy, edit, expand, edit_expand };
+***************
+*** 151,157 ****
+--- 153,163 ----
+                  }
+          } else {
+                  /* several revisions to generate */
++ #ifdef MSDOS
++                 initeditfiles(dir?dir: tmpdir);
++ #else
+                  initeditfiles(dir?dir:"/tmp/");
++ #endif /* MSDOS */
+                  /* write initial revision into fcopy, no keyword expansion */
+                  scandeltatext(deltas[0],copy);
+                  i = 1;
+***************
+*** 285,291 ****
+--- 291,301 ----
+                  }
+                  /* read text from stdin */
+                  if (ttystdin()) {
++ #ifdef MSDOS
++                     VOID fputs("enter description, terminated with ^Z or '.':\n",stderr);
++ #else
+                      VOID fputs("enter description, terminated with ^D or '.':\n",stderr);
++ #endif /* MSDOS */
+                      VOID fputs("NOTE: This is NOT the log message!\n>> ",stderr);
+  		    if (feof(stdin))
+  		            clearerr(stdin);
+diff -cbBwr rcs43/src/rcslex.c rcs43-2/src/rcslex.c
+*** rcs43/src/rcslex.c	Wed Sep 19 19:02:54 1990
+--- rcs43-2/src/rcslex.c	Fri Sep 21 15:08:04 1990
+***************
+*** 137,143 ****
+--- 137,147 ----
+                              /*into the symbol table. Handle with care.      */
+  int             nextc;      /*next input character, initialized by Lexinit  */
+  
++ #ifdef MSDOS
++ int             eoftok;        /*end-of-file indicator, set to >0 on end of file*/
++ #else
+  int             eof;        /*end-of-file indicator, set to >0 on end of file*/
++ #endif /* MSDOS */
+  int             line;       /*current line-number of input                  */
+  int             nerror;     /*counter for errors                            */
+  int             nwarn;      /*counter for warnings                          */
+***************
+*** 241,247 ****
+--- 245,255 ----
+                  hshtab[c].num = nil;
+          }
+  
++ #ifdef MSDOS
++         hshenter=true; eoftok=0; line=1; nerror=0; nwarn=0;
++ #else
+          hshenter=true; eof=0; line=1; nerror=0; nwarn=0;
++ #endif /* MSDOS */
+          NextString=nil; Topchar = &StringTab[0];
+          if (finptr) {
+                  nextc = GETC(finptr,frewrite,rewriteflag); /*initial character*/
+***************
+*** 272,278 ****
+--- 280,290 ----
+          register char * sp;
+          register enum tokens d;
+  
++ #ifdef MSDOS
++         if (eoftok) {
++ #else
+          if (eof) {
++ #endif /* MSDOS */
+                  nexttok=EOFILE;
+                  return;
+          }
+***************
+*** 299,305 ****
+--- 311,321 ----
+                  goto loop;
+  
+          case EOFILE:
++ #ifdef MSDOS
++                 eoftok++;
++ #else
+                  eof++;
++ #endif /* MSDOS */
+                  nexttok=EOFILE;
+                  return;
+  
+***************
+*** 692,702 ****
+--- 708,722 ----
+  	va_list ap;
+  
+  	va_start(ap);
++ #ifdef MSDOS
++ 	VOID vfprintf(iop, fmt, ap);
++ #else
+  #ifdef VFPRINTF
+  	VOID vfprintf(iop, fmt, ap);
+  #else
+  	_doprnt(fmt, ap, iop);
+  #endif
++ #endif /* MSDOS */
+          if (ferror(iop)) {
+  		writeerror();
+                  value = EOF;
+diff -cbBwr rcs43/src/rcsmerge.c rcs43-2/src/rcsmerge.c
+*** orig/src/rcsmerge.c	Mon Oct 01 19:03:34 1990
+--- rcs/src/rcsmerge.c	Mon Oct 01 18:47:56 1990
+***************
+*** 88,93 ****
+--- 88,98 ----
+  extern struct hshentry * genrevs(); /*generate delta numbers                */
+  extern int  nerror;                 /*counter for errors                    */
+  
++ #ifdef MSDOS
++ extern char *getmpdir();
++ char	tmpdir[NCPPN];
++ #endif /* MSODS */
++ 
+  char *RCSfilename;
+  char *workfilename;
+  char * temp1file, * temp2file;
+***************
+*** 135,140 ****
+--- 140,149 ----
+          if (argc<1) faterror("No input file\n%s",cmdusage);
+          if (revnums<1) faterror("no base revision number given");
+  
++ #ifdef MSDOS
++ 	strcpy( tmpdir, (char *) gettmpdir() );
++ #endif /* MSDOS */
++ 
+          /* now handle all filenames */
+  
+          if (pairfilenames(argc,argv,true,false)==1) {
+***************
+*** 175,182 ****
+--- 184,196 ----
+  			goto end;
+  		}
+  
++ #ifdef MSDOS
++                 temp1file=mktempfile(tmpdir,TMPFILE1);
++                 temp2file=mktempfile(tmpdir,TMPFILE2);
++ #else
+                  temp1file=mktempfile("/tmp/",TMPFILE1);
+                  temp2file=mktempfile("/tmp/",TMPFILE2);
++ #endif /* MSDOS */
+  
+                  diagnose("retrieving revision %s",rev1);
+                  VOID sprintf(commarg,"-p%s",rev1);
+***************
+*** 194,201 ****
+--- 208,220 ----
+  
+                  if (
+  		      tostdout
++ #ifdef MSDOS
++ 			? run((char*)nil,(char*)nil,"sh",merge,"-p",workfilename,temp1file,temp2file,workfilename,rev2,(char*)nil)
++ 		    : run((char*)nil,(char*)nil,"sh",merge,     workfilename,temp1file,temp2file,workfilename,rev2,(char*)nil)) {
++ #else
+  		    ? run((char*)nil,(char*)nil,merge,"-p",workfilename,temp1file,temp2file,workfilename,rev2,(char*)nil)
+  		    : run((char*)nil,(char*)nil,merge,     workfilename,temp1file,temp2file,workfilename,rev2,(char*)nil)) {
++ #endif
+                          faterror("merge failed");
+                  }
+          }
+diff -cbBwr rcs43/src/rcsrev.c rcs43-2/src/rcsrev.c
+*** rcs43/src/rcsrev.c	Wed Sep 19 19:02:56 1990
+--- rcs43-2/src/rcsrev.c	Fri Sep 21 15:08:06 1990
+***************
+*** 713,716 ****
+  cleanup(){}
+  /*dummy*/
+  
+! #endif REVTEST
+--- 713,716 ----
+  cleanup(){}
+  /*dummy*/
+  
+! #endif /* REVTEST */
+diff -cbBwr rcs43/src/rcsutil.c rcs43-2/src/rcsutil.c
+*** rcs43/src/rcsutil.c	Wed Sep 19 19:02:52 1990
+--- rcs43-2/src/rcsutil.c	Fri Sep 21 16:04:12 1990
+***************
+*** 110,116 ****
+--- 110,118 ----
+  #include <sys/stat.h>
+  #include <signal.h>
+  #include "rcsbase.h"
++ #ifndef MSDOS
+  #include <pwd.h>
++ #endif /* NOT MSDOS */
+  #include <varargs.h>
+  
+  #if defined(USG) || defined(V4_2BSD)
+***************
+*** 117,133 ****
+  #include <fcntl.h>
+  #endif
+  
+  #ifndef V4_2BSD
+  #define vfork fork
+  #endif
+  
+  extern char * bindex();
+  extern FILE * finptr;
+  extern char * RCSfilename;
+  extern char * getlogin();
+  extern struct passwd *getpwuid();
+- extern char * malloc();
+  extern int errno;
+  
+  
+  char * talloc(size)
+--- 119,139 ----
+  #include <fcntl.h>
+  #endif
+  
++ #ifndef MSDOS
+  #ifndef V4_2BSD
+  #define vfork fork
+  #endif
++ #endif /* NOT MSDOS */
+  
+  extern char * bindex();
+  extern FILE * finptr;
+  extern char * RCSfilename;
++ #ifndef MSDOS
+  extern char * getlogin();
+  extern struct passwd *getpwuid();
+  extern int errno;
++ #endif /* NOT MSDOS */
++ extern char * malloc();
+  
+  
+  char * talloc(size)
+***************
+*** 140,152 ****
+  	return p;
+  }
+  
+! 
+  
+  char * getcaller()
+  /* Function: gets the callers login from his uid.
+   * If the uid is root, tries to get the true login with getlogin().
+   */
+! {       char * name;
+  	int uid;
+  	uid=getuid();
+  	if (uid==0) {
+--- 146,173 ----
+  	return p;
+  }
+  
+! #ifdef MSDOS
+! char * getenv( char * var );
+! #endif
+  
+  char * getcaller()
+  /* Function: gets the callers login from his uid.
+   * If the uid is root, tries to get the true login with getlogin().
+   */
+! {
+! 	char *name = "Unknown";
+! 	char *tmpname;
+! #ifdef MSDOS
+! #	ifndef MKS
+! 	if ((tmpname = getenv("USR")) != NULL)
+! #	else
+! 	if ((tmpname = getenv("LOGNAME")) != NULL)
+! #	endif
+! 		name = tmpname;
+! 	else if ((tmpname = getenv("USER")) != NULL)
+! 		name = tmpname;
+! 	return name;
+! #else
+  	int uid;
+  	uid=getuid();
+  	if (uid==0) {
+***************
+*** 156,161 ****
+--- 177,183 ----
+  			return name;
+  	}
+  	return(getpwuid(uid)->pw_name);
++ #endif /* MSDOS */
+  }
+  
+  
+***************
+*** 281,287 ****
+--- 303,313 ----
+          register struct access * next;
+          struct stat statbuf;
+  
++ #ifdef MSDOS
++         if ((AccessList==nil) || (strcmp(who,"ROOT_DOS")==0))
++ #else
+          if ((AccessList==nil) || (strcmp(who,"root")==0))
++ #endif /* MSDOS */
+                  return true;
+  
+          next=AccessList;
+***************
+*** 291,305 ****
+--- 317,340 ----
+                  next=next->nextaccess;
+          } while (next!=nil);
+  
++ #ifdef MSDOS
++ #else
+          VOID fstat(fileno(finptr),&statbuf);  /* get owner of file */
+          if (getuid() == statbuf.st_uid) return true;
++ #endif /* MSDOS */
+  
+          error("User %s not on the access list",who);
+          return false;
+  }
+  
++ /* In MSDOS, we have a few signals. 	*/
++ /* So, we set signal handlar for only SIGINT. $Author: lfk $	*/
+  
++ #ifdef MSDOS
++ void catchsig(void)
++ #else
+  static SIGNAL_TYPE catchsig(s)
++ #endif /* MSDOS */
+  {
+  	ignoreints();
+          diagnose("\nRCS: cleaning up\n");
+***************
+*** 310,341 ****
+  #endif
+  }
+  
+  static sig[] = {SIGINT,SIGHUP,SIGQUIT,SIGPIPE,SIGTERM};
+  #define SIGS (sizeof(sig)/sizeof(*sig))
+  static SIGNAL_TYPE (*catcher[SIGS])();
+! 
+    void catchints()
+    {
+  	register i;
+  	for (i=SIGS; 0<=--i; )
+  	    catcher[i]  =
+  		signal(sig[i],SIG_IGN) == SIG_IGN  ?  SIG_IGN  :  catchsig;
+  	restoreints();
+    }
+  
+    void ignoreints()
+    {
+  	register i;
+  	for (i=SIGS; 0<=--i; )
+  		VOID signal(sig[i], SIG_IGN);
+    }
+  
+  void restoreints()
+  {
+  	register i;
+  	for (i=SIGS; 0<=--i; )
+  		if (catcher[i] != SIG_IGN)
+  			VOID signal(sig[i], catcher[i]);
+  }
+  
+  fastcopy(inf,outf)
+--- 345,390 ----
+  #endif
+  }
+  
++ #ifndef MSDOS
+  static sig[] = {SIGINT,SIGHUP,SIGQUIT,SIGPIPE,SIGTERM};
+  #define SIGS (sizeof(sig)/sizeof(*sig))
+  static SIGNAL_TYPE (*catcher[SIGS])();
+! #endif /* NOT MSDOS */
+    void catchints()
+    {
++ #ifdef MSDOS
++ 	signal(SIGINT, catchsig); /* $Author: lfk $ fixed this so Ctrl-C halts processing */
++ 	restoreints();
++ #else
+  	register i;
+  	for (i=SIGS; 0<=--i; )
+  	    catcher[i]  =
+  		signal(sig[i],SIG_IGN) == SIG_IGN  ?  SIG_IGN  :  catchsig;
+  	restoreints();
++ #endif /* MSDOS */
+    }
+  
+    void ignoreints()
+    {
++ #ifdef MSDOS
++ 	VOID signal(SIGINT, SIG_IGN);
++ #else
+  	register i;
+  	for (i=SIGS; 0<=--i; )
+  		VOID signal(sig[i], SIG_IGN);
++ #endif /* MSDOS */
+    }
+  
+  void restoreints()
+  {
++ #ifdef MSDOS
++ 	VOID signal(SIGINT, catchsig);
++ #else
+  	register i;
+  	for (i=SIGS; 0<=--i; )
+  		if (catcher[i] != SIG_IGN)
+  			VOID signal(sig[i], catcher[i]);
++ #endif /* MSDOS */
+  }
+  
+  fastcopy(inf,outf)
+***************
+*** 455,460 ****
+--- 504,525 ----
+  static int run_back(inoutargs)
+  	char **inoutargs;
+  {
++ #ifdef MSDOS
++ 	int result, si, so;
++ 
++ 	if (fflush(stdout) == EOF  ||  fflush(stderr) == EOF)
++ 		return -1;
++         si = dup(0);
++         so = dup(1);
++ 	tryopen(fileno(stdin), inoutargs[0], 0);
++ 	tryopen(fileno(stdout), inoutargs[1], -1);
++ 	result = spawnvp( 0, inoutargs[2], &inoutargs[2] );
++ 	dup2(si, 0);
++ 	dup2(so, 1);
++         close(si);
++         close(so);
++ 	return result;
++ #else
+  	int pid;
+  	register char **p;
+  	if (fflush(stdout) == EOF  ||  fflush(stderr) == EOF)
+***************
+*** 473,478 ****
+--- 538,544 ----
+  		_exit(2);
+  	}
+  	return pid;
++ #endif /* MSDOS */
+  }
+  
+  #define CARGSMAX 20
+***************
+*** 498,508 ****
+--- 564,593 ----
+  	}
+  	va_end(ap);
+  	pid = run_back(rgargs);
++ #ifndef MSDOS
+  	if (pid < 0)
++ #endif /* MSDOS */
+  		return pid;
++ #ifndef MSDOS
+  	for (;;)
+  		if ((w = wait(&wstatus)) < 0)
+  			return w;
+  		else if (w == pid)
+  			return wstatus;
++ #endif /* NOT MSDOS */
++ }
++ 
++ #ifdef MSDOS
++ int Rename( from, to )
++ char	*from;
++ char	*to;
++ {
++ 	if ( access( to, 0 ) == 0 ) {
++ 		if ( chmod( to, S_IWRITE | S_IREAD ) == -1 )
++ 			return (-1);
++ 		if ( unlink(to) != 0 )
++ 			return (-1);
++ 	}
++ 		return ( rename( from, to ) );
+  }
++ #endif /* MSDOS */
